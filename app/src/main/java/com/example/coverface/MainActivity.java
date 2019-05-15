@@ -22,18 +22,20 @@ import static android.os.Environment.getExternalStoragePublicDirectory;
 
 public class MainActivity extends AppCompatActivity {
 
-    static final int REQUEST_IMAGE_CAPTURE = 1;
     static final int REQUEST_TAKE_PHOTO = 1;
+    private static final int READ_REQUEST_CODE = 2;
     String currentPhotoPath;
     File photoFile;
+    File maskPhotoFile;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        this.dispatchTakePictureIntent();
-        this.galleryAddPic();
+        this.performFileSearch();
+        //this.dispatchTakePictureIntent();
+        //this.galleryAddPic();
     }
 
     private File createImageFile() throws IOException {
@@ -82,12 +84,27 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        if (requestCode == REQUEST_TAKE_PHOTO && resultCode == RESULT_OK) {
-            Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
-            //Bitmap imageBitmap = (Bitmap) extras.get("data");
-            ImageView imageView = (ImageView) findViewById(R.id.taken_image);
-            imageView.setImageBitmap(imageBitmap);
-            this.galleryAddPic();
+        Log.d("requestCode", String.valueOf(requestCode));
+        Log.d("resultCode", String.valueOf(resultCode));
+        if (resultCode == RESULT_OK) {
+            switch (requestCode) {
+                case REQUEST_TAKE_PHOTO:
+                    Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
+                    //Bitmap imageBitmap = (Bitmap) extras.get("data");
+                    ImageView imageView = (ImageView) findViewById(R.id.taken_image);
+                    imageView.setImageBitmap(imageBitmap);
+                    this.galleryAddPic();
+                    break;
+                case READ_REQUEST_CODE:
+                    Uri uri = null;
+                    Log.d("tag", "success");
+                    if (data != null) {
+                        uri = data.getData();
+                    }
+                    this.dispatchTakePictureIntent();
+                default:
+                    break;
+            }
         }
     }
 
@@ -97,6 +114,13 @@ public class MainActivity extends AppCompatActivity {
         Uri contentUri = Uri.fromFile(f);
         mediaScanIntent.setData(contentUri);
         this.sendBroadcast(mediaScanIntent);
+    }
+
+    public void performFileSearch() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        startActivityForResult(intent, READ_REQUEST_CODE);
     }
 
 }
