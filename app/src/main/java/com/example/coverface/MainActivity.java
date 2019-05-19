@@ -1,11 +1,13 @@
 package com.example.coverface;
 
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.media.Image;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.MediaStore;
 import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
@@ -13,25 +15,71 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.ImageView;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.LoaderCallbackInterface;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.android.Utils;
+import org.opencv.core.Mat;
+import org.opencv.core.MatOfRect;
+import org.opencv.objdetect.CascadeClassifier;
+
 import java.io.File;
+import java.io.FileDescriptor;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 
 import static android.os.Environment.getExternalStoragePublicDirectory;
 
+
 public class MainActivity extends AppCompatActivity {
 
+    private static final String FILE_NAME = "haarcascade_frontalface_alt.xml";
     static final int REQUEST_TAKE_PHOTO = 1;
     private static final int READ_REQUEST_CODE = 2;
     String currentPhotoPath;
     File photoFile;
     File maskPhotoFile;
+    Mat coverPhoto;
+    Mat takenPhoto;
+
+    CascadeClassifier cascadeClassifier;
+
+    private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
+        @Override
+        public void onManagerConnected(int status) {
+            switch (status) {
+                case LoaderCallbackInterface.SUCCESS:
+
+            }
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        File file = new File(getFilesDir().getPath() + File.separator + FILE_NAME);
+        if (!file.exists()) {
+            try (InputStream inputStream = getAssets().open(FILE_NAME);
+                 FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
+                byte[] buffer = new byte[1024];
+                int read;
+                while ((read = inputStream.read(buffer)) != -1) {
+                    fileOutputStream.write(buffer, 0, read);
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+
+        if (OpenCVLoader.initDebug()) {
+            this.cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+        }
 
         this.performFileSearch();
         //this.dispatchTakePictureIntent();
@@ -84,8 +132,6 @@ public class MainActivity extends AppCompatActivity {
 
     @Override
     protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-        Log.d("requestCode", String.valueOf(requestCode));
-        Log.d("resultCode", String.valueOf(resultCode));
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
@@ -93,15 +139,26 @@ public class MainActivity extends AppCompatActivity {
                     //Bitmap imageBitmap = (Bitmap) extras.get("data");
                     ImageView imageView = (ImageView) findViewById(R.id.taken_image);
                     imageView.setImageBitmap(imageBitmap);
+
+                    Utils.bitmapToMat(imageBitmap, this.takenPhoto);
                     this.galleryAddPic();
                     break;
                 case READ_REQUEST_CODE:
-                    Uri uri = null;
+                    Uri coverPhotoUri = null;
                     Log.d("tag", "success");
                     if (data != null) {
-                        uri = data.getData();
+                        coverPhotoUri = data.getData();
+                        Log.d("path", coverPhotoUri.toString());
+                        Log.d("path", coverPhotoUri.getPath());
+                        try {
+                            Bitmap coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
+                            this.coverPhoto = new Mat();
+                            Utils.bitmapToMat(coverPhotoBitmap, this.coverPhoto);
+                            this.dispatchTakePictureIntent();
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
                     }
-                    this.dispatchTakePictureIntent();
                 default:
                     break;
             }
@@ -121,6 +178,15 @@ public class MainActivity extends AppCompatActivity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("image/*");
         startActivityForResult(intent, READ_REQUEST_CODE);
+    }
+
+    private Bitmap getBitmapFromUri(Uri uri) throws IOException {
+        ParcelFileDescriptor parcelFileDescriptor =
+                getContentResolver().openFileDescriptor(uri, "r");
+        FileDescriptor fileDescriptor = parcelFileDescriptor.getFileDescriptor();
+        Bitmap image = BitmapFactory.decodeFileDescriptor(fileDescriptor);
+        parcelFileDescriptor.close();
+        return image;
     }
 
 }
