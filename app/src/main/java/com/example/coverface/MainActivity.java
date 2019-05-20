@@ -21,6 +21,9 @@ import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
+import org.opencv.core.Rect;
+import org.opencv.core.Scalar;
+import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
 import java.io.File;
@@ -54,6 +57,22 @@ public class MainActivity extends AppCompatActivity {
                 case LoaderCallbackInterface.SUCCESS:
                     coverPhoto = new Mat();
                     takenPhoto = new Mat();
+
+                    File file = new File(getFilesDir().getPath() + File.separator + FILE_NAME);
+                    if (!file.exists()) {
+                        try (InputStream inputStream = getAssets().open(FILE_NAME);
+                             FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
+                            byte[] buffer = new byte[1024];
+                            int read;
+                            while ((read = inputStream.read(buffer)) != -1) {
+                                fileOutputStream.write(buffer, 0, read);
+                            }
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                    cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+
                     performFileSearch();
                     break;
                 default:
@@ -70,23 +89,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
 
         //this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-        File file = new File(getFilesDir().getPath() + File.separator + FILE_NAME);
-        if (!file.exists()) {
-            try (InputStream inputStream = getAssets().open(FILE_NAME);
-                 FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
-                byte[] buffer = new byte[1024];
-                int read;
-                while ((read = inputStream.read(buffer)) != -1) {
-                    fileOutputStream.write(buffer, 0, read);
-                }
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
-        }
-
         if (OpenCVLoader.initDebug()) {
             this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-            //this.cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
         } else {
             OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, getApplicationContext(),
                     mLoaderCallback);
@@ -160,19 +164,17 @@ public class MainActivity extends AppCompatActivity {
                 case REQUEST_TAKE_PHOTO:
                     Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
                     //Bitmap imageBitmap = (Bitmap) extras.get("data");
+                    this.takenPhoto = new Mat();
+                    Utils.bitmapToMat(imageBitmap, this.takenPhoto);
+                    this.maskHumanFace(this.takenPhoto, imageBitmap);
                     ImageView imageView = (ImageView) findViewById(R.id.taken_image);
                     imageView.setImageBitmap(imageBitmap);
-
-                    Utils.bitmapToMat(imageBitmap, this.takenPhoto);
                     this.galleryAddPic();
                     break;
                 case READ_REQUEST_CODE:
                     Uri coverPhotoUri = null;
-                    Log.d("tag", "success");
                     if (data != null) {
                         coverPhotoUri = data.getData();
-                        Log.d("path", coverPhotoUri.toString());
-                        Log.d("path", coverPhotoUri.getPath());
                         try {
                             Bitmap coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
                             this.coverPhoto = new Mat();
@@ -182,10 +184,25 @@ public class MainActivity extends AppCompatActivity {
                             e.printStackTrace();
                         }
                     }
+                    break;
                 default:
                     break;
             }
         }
+    }
+
+    private void resizeImage(Mat sourceImage) {
+
+    }
+
+    private void maskHumanFace(Mat takenPhoto, Bitmap faceMaskedBitmap) {
+        MatOfRect faceDetectResults = new MatOfRect();
+        cascadeClassifier.detectMultiScale(takenPhoto, faceDetectResults);
+        Rect[] detectedFaces = faceDetectResults.toArray();
+        for (int i = 0; i < detectedFaces.length; i++) {
+            Imgproc.rectangle(takenPhoto, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
+        }
+        Utils.matToBitmap(takenPhoto, faceMaskedBitmap);
     }
 
     private void galleryAddPic() {
