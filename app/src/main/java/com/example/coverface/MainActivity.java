@@ -52,6 +52,13 @@ public class MainActivity extends AppCompatActivity {
         public void onManagerConnected(int status) {
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS:
+                    coverPhoto = new Mat();
+                    takenPhoto = new Mat();
+                    performFileSearch();
+                    break;
+                default:
+                    super.onManagerConnected(status);
+                    break;
 
             }
         }
@@ -62,7 +69,7 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        //this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         File file = new File(getFilesDir().getPath() + File.separator + FILE_NAME);
         if (!file.exists()) {
             try (InputStream inputStream = getAssets().open(FILE_NAME);
@@ -78,13 +85,29 @@ public class MainActivity extends AppCompatActivity {
         }
 
         if (OpenCVLoader.initDebug()) {
-            this.cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+            this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+            //this.cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+        } else {
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, getApplicationContext(),
+                    mLoaderCallback);
         }
 
-        this.performFileSearch();
+        //this.performFileSearch();
         //this.dispatchTakePictureIntent();
         //this.galleryAddPic();
     }
+
+    //public void onResume()
+    //{
+    //    super.onResume();
+    //    if (!OpenCVLoader.initDebug()) {
+    //        Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
+    //        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_4_0, this, mLoaderCallback);
+    //    } else {
+    //        Log.d("OpenCV", "OpenCV library found inside package. Using it!");
+    //        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+    //    }
+    //}
 
     private File createImageFile() throws IOException {
         // Create an image file name
