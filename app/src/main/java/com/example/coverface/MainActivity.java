@@ -19,10 +19,14 @@ import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.android.Utils;
+import org.opencv.core.Core;
+import org.opencv.core.CvType;
 import org.opencv.core.Mat;
 import org.opencv.core.MatOfRect;
+import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
@@ -163,11 +167,10 @@ public class MainActivity extends AppCompatActivity {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
                     Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
-                    //Bitmap imageBitmap = (Bitmap) extras.get("data");
                     this.takenPhoto = new Mat();
                     Utils.bitmapToMat(imageBitmap, this.takenPhoto);
-                    this.maskHumanFace(this.takenPhoto, imageBitmap);
                     ImageView imageView = (ImageView) findViewById(R.id.taken_image);
+                    this.maskHumanFace(this.takenPhoto, imageBitmap);
                     imageView.setImageBitmap(imageBitmap);
                     this.galleryAddPic();
                     break;
@@ -191,18 +194,76 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void resizeImage(Mat sourceImage) {
-
+    private Mat resizeImage(Mat sourceImage, int resizeHeight, int resizeWidth) {
+        Mat resizedImage = new Mat();
+        Size resizedSize = new Size(resizeHeight, resizeWidth);
+        Imgproc.resize(sourceImage, resizedImage, resizedSize);
+        return resizedImage;
     }
 
-    private void maskHumanFace(Mat takenPhoto, Bitmap faceMaskedBitmap) {
+    private void maskHumanFace(Mat sourceImage, Bitmap faceMaskedBitmap) {
         MatOfRect faceDetectResults = new MatOfRect();
         cascadeClassifier.detectMultiScale(takenPhoto, faceDetectResults);
         Rect[] detectedFaces = faceDetectResults.toArray();
+        Mat maskingImage;
+        Mat affineMat = new Mat(2, 3, CvType.CV_64F);
+        Log.d("mask", "mask");
         for (int i = 0; i < detectedFaces.length; i++) {
-            Imgproc.rectangle(takenPhoto, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
+            int height = detectedFaces[i].height;
+            int width = detectedFaces[i].width;
+            Point upperLeftPoint = detectedFaces[i].tl();
+            maskingImage = resizeImage(this.coverPhoto, height, width);
+            affineMat = new Mat(2, 3, CvType.CV_64F);
+            affineMat.put(0,0, 1.0, 0.0, upperLeftPoint.x, 0.0, 1.0, upperLeftPoint.y);
+            this.overlayImage(sourceImage, maskingImage, sourceImage, upperLeftPoint);
+            //Imgproc.warpAffine( maskingImage, sourceImage, affineMat, sourceImage.size(), Core.BORDER_TRANSPARENT);
+            //Imgproc.rectangle(sourceImage, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
         }
-        Utils.matToBitmap(takenPhoto, faceMaskedBitmap);
+        Utils.matToBitmap(sourceImage, faceMaskedBitmap);
+    }
+
+    public static void overlayImage(Mat background,Mat foreground,Mat output, Point location){
+
+        background.copyTo(output);
+
+        for(int y = (int) Math.max(location.y , 0); y < background.rows(); ++y){
+
+            int fY = (int) (y - location.y);
+
+            if(fY >= foreground.rows())
+                break;
+
+            for(int x = (int) Math.max(location.x, 0); x < background.cols(); ++x){
+                int fX = (int) (x - location.x);
+                if(fX >= foreground.cols()){
+                    break;
+                }
+
+                double opacity;
+                double[] finalPixelValue = new double[4];
+
+                opacity = foreground.get(fY , fX)[3];
+
+                finalPixelValue[0] = background.get(y, x)[0];
+                finalPixelValue[1] = background.get(y, x)[1];
+                finalPixelValue[2] = background.get(y, x)[2];
+                finalPixelValue[3] = background.get(y, x)[3];
+
+                for(int c = 0;  c < output.channels(); ++c){
+                    if(opacity > 0){
+                        double foregroundPx =  foreground.get(fY, fX)[c];
+                        double backgroundPx =  background.get(y, x)[c];
+
+                        float fOpacity = (float) (opacity / 255);
+                        finalPixelValue[c] = ((backgroundPx * ( 1.0 - fOpacity)) + (foregroundPx * fOpacity));
+                        if(c==3){
+                            finalPixelValue[c] = foreground.get(fY,fX)[3];
+                        }
+                    }
+                }
+                output.put(y, x,finalPixelValue);
+            }
+        }
     }
 
     private void galleryAddPic() {
