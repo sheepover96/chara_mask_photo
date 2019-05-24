@@ -1,5 +1,6 @@
 package com.example.coverface;
 
+import android.app.ProgressDialog;
 import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
@@ -13,6 +14,7 @@ import android.support.v4.content.FileProvider;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.view.View;
 import android.widget.ImageView;
 
 import org.opencv.android.BaseLoaderCallback;
@@ -41,7 +43,7 @@ import java.util.Date;
 import static android.os.Environment.getExternalStoragePublicDirectory;
 
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements View.OnClickListener {
 
     private static final String FILE_NAME = "haarcascade_frontalface_alt.xml";
     static final int REQUEST_TAKE_PHOTO = 1;
@@ -51,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
     File maskPhotoFile;
     Mat coverPhoto;
     Mat takenPhoto;
+    Bitmap resultBitmap;
 
     CascadeClassifier cascadeClassifier;
 
@@ -104,6 +107,26 @@ public class MainActivity extends AppCompatActivity {
         //this.dispatchTakePictureIntent();
         //this.galleryAddPic();
     }
+
+    @Override
+    public void onClick(View view) {
+        Log.d("click", "click");
+        if (view.getId() == R.id.save_button) {
+            Log.d("delete", "delete");
+            try {
+                File newImgFile = createImageFile();
+                this.saveBitmapImage(newImgFile.getPath(), resultBitmap);
+                this.galleryAddPic(newImgFile.getPath());
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            this.performFileSearch();
+        } else if (view.getId() == R.id.delete_button) {
+            Log.d("save", "save");
+            this.performFileSearch();
+        }
+    }
+
 
     //public void onResume()
     //{
@@ -167,12 +190,12 @@ public class MainActivity extends AppCompatActivity {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
                     Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
+                    resultBitmap = imageBitmap;
                     this.takenPhoto = new Mat();
                     Utils.bitmapToMat(imageBitmap, this.takenPhoto);
                     ImageView imageView = (ImageView) findViewById(R.id.taken_image);
-                    this.maskHumanFace(this.takenPhoto, imageBitmap);
-                    imageView.setImageBitmap(imageBitmap);
-                    this.galleryAddPic();
+                    this.maskHumanFace(this.takenPhoto, resultBitmap);
+                    imageView.setImageBitmap(resultBitmap);
                     break;
                 case READ_REQUEST_CODE:
                     Uri coverPhotoUri = null;
@@ -201,7 +224,21 @@ public class MainActivity extends AppCompatActivity {
         return resizedImage;
     }
 
+    private void saveBitmapImage(String saveFilePath, Bitmap image) {
+        try {
+            FileOutputStream output = new FileOutputStream(saveFilePath);
+            image.compress(Bitmap.CompressFormat.PNG, 100, output);
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
     private void maskHumanFace(Mat sourceImage, Bitmap faceMaskedBitmap) {
+        //ProgressDialog progressDialog = new ProgressDialog(this);
+        //progressDialog.setTitle("処理中");
+        //progressDialog.setMessage("少々お待ちください");
+        //progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
+        //progressDialog.show();
         MatOfRect faceDetectResults = new MatOfRect();
         cascadeClassifier.detectMultiScale(takenPhoto, faceDetectResults);
         Rect[] detectedFaces = faceDetectResults.toArray();
@@ -213,13 +250,12 @@ public class MainActivity extends AppCompatActivity {
             int width = detectedFaces[i].width;
             Point upperLeftPoint = detectedFaces[i].tl();
             maskingImage = resizeImage(this.coverPhoto, height, width);
-            affineMat = new Mat(2, 3, CvType.CV_64F);
-            affineMat.put(0,0, 1.0, 0.0, upperLeftPoint.x, 0.0, 1.0, upperLeftPoint.y);
             this.overlayImage(sourceImage, maskingImage, sourceImage, upperLeftPoint);
             //Imgproc.warpAffine( maskingImage, sourceImage, affineMat, sourceImage.size(), Core.BORDER_TRANSPARENT);
             //Imgproc.rectangle(sourceImage, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
         }
         Utils.matToBitmap(sourceImage, faceMaskedBitmap);
+        //progressDialog.dismiss();
     }
 
     public static void overlayImage(Mat background,Mat foreground,Mat output, Point location){
@@ -266,9 +302,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private void galleryAddPic() {
+    private void galleryAddPic(String imageFilePath) {
         Intent mediaScanIntent = new Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE);
-        File f = new File(currentPhotoPath);
+        File f = new File(imageFilePath);
         Uri contentUri = Uri.fromFile(f);
         mediaScanIntent.setData(contentUri);
         this.sendBroadcast(mediaScanIntent);
