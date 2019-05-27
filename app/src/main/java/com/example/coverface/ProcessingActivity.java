@@ -6,24 +6,14 @@ import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
 import android.os.ParcelFileDescriptor;
-import android.os.RecoverySystem;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.MotionEvent;
-import android.widget.ProgressBar;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
 import org.opencv.android.OpenCVLoader;
-import org.opencv.android.Utils;
-import org.opencv.core.CvType;
 import org.opencv.core.Mat;
-import org.opencv.core.MatOfRect;
-import org.opencv.core.Point;
-import org.opencv.core.Rect;
-import org.opencv.core.Size;
-import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
 
 import java.io.File;
@@ -39,8 +29,6 @@ import static android.os.Environment.getExternalStoragePublicDirectory;
 public class ProcessingActivity extends AppCompatActivity {
 
     private static final String FILE_NAME = "haarcascade_frontalface_alt.xml";
-    private ProgressBar progressBar;
-    private int progressVal;
 
     Mat takenPhoto;
     Bitmap takenPhotoBitmap;
@@ -85,8 +73,6 @@ public class ProcessingActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_processing);
-        //Intent intent = getIntent();
-
         if (OpenCVLoader.initDebug()) {
             this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         } else {
@@ -94,84 +80,41 @@ public class ProcessingActivity extends AppCompatActivity {
                     mLoaderCallback);
         }
 
-        //this.progressBar = findViewById(R.id.progress_bar);
-        //progressBar.setMax(100);
-
-        //try {
-        //    Uri coverPhotoUri = (Uri) intent.getExtras().get("coverPhotoUri");
-        //    File takenPhotoFile = (File) intent.getExtras().get("takenPhotoFile");
-        //    coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
-        //    takenPhotoBitmap = BitmapFactory.decodeFile(takenPhotoFile.getPath());
-        //    this.takenPhoto = new Mat();
-        //    this.coverPhoto = new Mat();
-        //    Utils.bitmapToMat(coverPhotoBitmap, this.coverPhoto);
-        //    Utils.bitmapToMat(takenPhotoBitmap, this.takenPhoto);
-        //    faceMaskedBitmap = takenPhotoBitmap;
-        //    this.maskHumanFace(this.takenPhoto, this.coverPhoto, this.faceMaskedBitmap);
-        //    File saveFile = createImageFile();
-        //    saveBitmapImage(saveFile.getAbsolutePath(), this.faceMaskedBitmap);
-        //    Intent resultIntent = new Intent();
-        //    resultIntent.putExtra("faceMaskedFile", saveFile);
-        //} catch (IOException e) {
-        //    e.printStackTrace();
-        //}
-        //finish();
     }
 
-    //public boolean onTouchEvent(MotionEvent event) {
-    //    Log.d("touch", "touch");
-    //    return true;
-    //}
-
     private void startMaskingFace() {
-        Intent intent = getIntent();
-        this.progressBar = findViewById(R.id.progress_bar);
-        progressBar.setMax(100);
+        final Intent intent = getIntent();
 
         try {
             Uri coverPhotoUri = (Uri) intent.getExtras().get("coverPhotoUri");
             File takenPhotoFile = (File) intent.getExtras().get("takenPhotoFile");
             coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
             takenPhotoBitmap = BitmapFactory.decodeFile(takenPhotoFile.getPath());
-            this.takenPhoto = new Mat();
-            this.coverPhoto = new Mat();
-            Utils.bitmapToMat(coverPhotoBitmap, this.coverPhoto);
-            Utils.bitmapToMat(takenPhotoBitmap, this.takenPhoto);
-            faceMaskedBitmap = takenPhotoBitmap;
-            this.maskHumanFace(this.takenPhoto, this.coverPhoto, this.faceMaskedBitmap);
-            File saveFile = createImageFile();
-            saveBitmapImage(saveFile.getAbsolutePath(), this.faceMaskedBitmap);
-            Intent resultIntent = new Intent();
-            resultIntent.putExtra("faceMaskedFile", saveFile);
+            MaskFaceAsync task = new MaskFaceAsync(this, coverPhotoBitmap, takenPhotoBitmap, cascadeClassifier);
+            task.setOnCallBack(new MaskFaceAsync.CallBackTask() {
+                @Override
+                public void CallBack(Bitmap resultBitmap) {
+                    faceMaskedBitmap = resultBitmap;
+                    try {
+                        Log.d("finish", "finish");
+                        File saveFile = createImageFile();
+                        saveBitmapImage(saveFile.getAbsolutePath(), faceMaskedBitmap);
+                        Intent resultIntent = new Intent();
+                        resultIntent.putExtra("faceMaskedFile", saveFile);
+                        setResult(RESULT_OK, resultIntent);
+                        finish();
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+            });
+            task.execute(this);
         } catch (IOException e) {
             e.printStackTrace();
         }
-        finish();
     }
 
-    private void maskHumanFace(Mat sourceImage, Mat coverImage, Bitmap faceMaskedBitmap) {
-        this.progressVal = 0;
-        MatOfRect faceDetectResults = new MatOfRect();
-        cascadeClassifier.detectMultiScale(takenPhoto, faceDetectResults);
-        Rect[] detectedFaces = faceDetectResults.toArray();
-        Mat maskingImage;
-        int progressStep = 100/detectedFaces.length;
-        for (int i = 0; i < detectedFaces.length; i++) {
-            int height = detectedFaces[i].height;
-            int width = detectedFaces[i].width;
-            Point upperLeftPoint = detectedFaces[i].tl();
-            maskingImage = resizeImage(coverImage, height, width);
-            this.overlayImage(sourceImage, maskingImage, sourceImage, upperLeftPoint);
-            this.progressVal += progressStep;
-            Log.d("val", String.valueOf(this.progressVal));
-            this.progressBar.setProgress(this.progressVal);
-            //Imgproc.warpAffine( maskingImage, sourceImage, affineMat, sourceImage.size(), Core.BORDER_TRANSPARENT);
-            //Imgproc.rectangle(sourceImage, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
-        }
-        Utils.matToBitmap(sourceImage, faceMaskedBitmap);
-    }
-
-    private File createImageFile() throws IOException {
+    static public File createImageFile() throws IOException {
         // Create an image file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
@@ -182,59 +125,7 @@ public class ProcessingActivity extends AppCompatActivity {
                 storageDir      /* directory */
         );
 
-        // Save a file: path for use with ACTION_VIEW intents
         return image;
-    }
-
-    private Mat resizeImage(Mat sourceImage, int resizeHeight, int resizeWidth) {
-        Mat resizedImage = new Mat();
-        Size resizedSize = new Size(resizeHeight, resizeWidth);
-        Imgproc.resize(sourceImage, resizedImage, resizedSize);
-        return resizedImage;
-    }
-
-    public static void overlayImage(Mat background,Mat foreground,Mat output, Point location){
-
-        background.copyTo(output);
-
-        for(int y = (int) Math.max(location.y , 0); y < background.rows(); ++y){
-
-            int fY = (int) (y - location.y);
-
-            if(fY >= foreground.rows())
-                break;
-
-            for(int x = (int) Math.max(location.x, 0); x < background.cols(); ++x){
-                int fX = (int) (x - location.x);
-                if(fX >= foreground.cols()){
-                    break;
-                }
-
-                double opacity;
-                double[] finalPixelValue = new double[4];
-
-                opacity = foreground.get(fY , fX)[3];
-
-                finalPixelValue[0] = background.get(y, x)[0];
-                finalPixelValue[1] = background.get(y, x)[1];
-                finalPixelValue[2] = background.get(y, x)[2];
-                finalPixelValue[3] = background.get(y, x)[3];
-
-                for(int c = 0;  c < output.channels(); ++c){
-                    if(opacity > 0){
-                        double foregroundPx =  foreground.get(fY, fX)[c];
-                        double backgroundPx =  background.get(y, x)[c];
-
-                        float fOpacity = (float) (opacity / 255);
-                        finalPixelValue[c] = ((backgroundPx * ( 1.0 - fOpacity)) + (foregroundPx * fOpacity));
-                        if(c==3){
-                            finalPixelValue[c] = foreground.get(fY,fX)[3];
-                        }
-                    }
-                }
-                output.put(y, x,finalPixelValue);
-            }
-        }
     }
 
     private Bitmap getBitmapFromUri(Uri uri) throws IOException {

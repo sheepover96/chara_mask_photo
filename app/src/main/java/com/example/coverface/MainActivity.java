@@ -59,6 +59,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     Bitmap takenPhotoBitmap;
     Uri takenPhotoUri;
     Bitmap resultBitmap;
+    File resultImageFile;
 
     CascadeClassifier cascadeClassifier;
 
@@ -67,17 +68,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        //this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         if (OpenCVLoader.initDebug()) {
             this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         } else {
             OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, getApplicationContext(),
                     mLoaderCallback);
         }
-
-        //this.performFileSearch();
-        //this.dispatchTakePictureIntent();
-        //this.galleryAddPic();
     }
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
@@ -115,38 +111,21 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
 
     @Override
     public void onClick(View view) {
-        Log.d("click", "click");
         if (view.getId() == R.id.save_button) {
-            Log.d("delete", "delete");
-            try {
-                File newImgFile = createImageFile();
-                this.saveBitmapImage(newImgFile.getPath(), resultBitmap);
-                this.galleryAddPic(newImgFile.getPath());
-            } catch (IOException e) {
-                e.printStackTrace();
-            }
+            this.galleryAddPic(resultImageFile.getPath());
+            resultImageFile = null;
+            photoFile = null;
             this.performFileSearch();
         } else if (view.getId() == R.id.delete_button) {
-            Log.d("save", "save");
+            resultImageFile.delete();
+            photoFile.delete();
+            resultImageFile = null;
+            photoFile = null;
             this.performFileSearch();
         }
     }
 
-
-    //public void onResume()
-    //{
-    //    super.onResume();
-    //    if (!OpenCVLoader.initDebug()) {
-    //        Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
-    //        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_4_0, this, mLoaderCallback);
-    //    } else {
-    //        Log.d("OpenCV", "OpenCV library found inside package. Using it!");
-    //        mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-    //    }
-    //}
-
     private File createImageFile() throws IOException {
-        // Create an image file name
         String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
         String imageFileName = "JPEG_" + timeStamp + "_";
         File storageDir = getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES);
@@ -156,7 +135,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 storageDir      /* directory */
         );
 
-        // Save a file: path for use with ACTION_VIEW intents
         currentPhotoPath = image.getAbsolutePath();
         return image;
     }
@@ -168,10 +146,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             try {
                 this.photoFile = createImageFile();
             } catch (IOException ex) {
-                // Error occurred while creating the File
                 ex.printStackTrace();
             }
-            // Continue only if the File was successfully created
             if (photoFile != null) {
                 Uri photoURI = FileProvider.getUriForFile(this,
                         "com.example.coverface.fileprovider",
@@ -188,17 +164,10 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
-                    //Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
-                    //resultBitmap = imageBitmap;
-                    //this.takenPhoto = new Mat();
-                    //Utils.bitmapToMat(imageBitmap, this.takenPhoto);
-                    //this.maskHumanFace(this.takenPhoto, resultBitmap);
                     Intent faceMaskIntent = new Intent(getApplicationContext(), ProcessingActivity.class);
                     faceMaskIntent.putExtra("coverPhotoUri", this.coverPhotoUri);
                     faceMaskIntent.putExtra("takenPhotoFile", this.photoFile);
                     startActivityForResult(faceMaskIntent, FACE_MASK_CODE);
-                    //ImageView imageView = (ImageView) findViewById(R.id.taken_image);
-                    //imageView.setImageBitmap(resultBitmap);
                     break;
                 case READ_REQUEST_CODE:
                     this.coverPhotoUri = null;
@@ -217,8 +186,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                 case FACE_MASK_CODE:
                     if (data != null) {
                         ImageView imageView = (ImageView) findViewById(R.id.taken_image);
-                        File imageFile = (File) data.getExtras().get("faceMaskedFile");
-                        resultBitmap = BitmapFactory.decodeFile(imageFile.getPath());
+                        resultImageFile = (File) data.getExtras().get("faceMaskedFile");
+                        resultBitmap = BitmapFactory.decodeFile(resultImageFile.getPath());
                         imageView.setImageBitmap(resultBitmap);
                     }
                 default:
@@ -227,87 +196,12 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         }
     }
 
-    private Mat resizeImage(Mat sourceImage, int resizeHeight, int resizeWidth) {
-        Mat resizedImage = new Mat();
-        Size resizedSize = new Size(resizeHeight, resizeWidth);
-        Imgproc.resize(sourceImage, resizedImage, resizedSize);
-        return resizedImage;
-    }
-
     private void saveBitmapImage(String saveFilePath, Bitmap image) {
         try {
             FileOutputStream output = new FileOutputStream(saveFilePath);
             image.compress(Bitmap.CompressFormat.PNG, 100, output);
         } catch (IOException e) {
             e.printStackTrace();
-        }
-    }
-
-    private void maskHumanFace(Mat sourceImage, Bitmap faceMaskedBitmap) {
-        //ProgressDialog progressDialog = new ProgressDialog(this);
-        //progressDialog.setTitle("処理中");
-        //progressDialog.setMessage("少々お待ちください");
-        //progressDialog.setProgressStyle(ProgressDialog.STYLE_SPINNER);
-        //progressDialog.show();
-        MatOfRect faceDetectResults = new MatOfRect();
-        cascadeClassifier.detectMultiScale(takenPhoto, faceDetectResults);
-        Rect[] detectedFaces = faceDetectResults.toArray();
-        Mat maskingImage;
-        Mat affineMat = new Mat(2, 3, CvType.CV_64F);
-        for (int i = 0; i < detectedFaces.length; i++) {
-            int height = detectedFaces[i].height;
-            int width = detectedFaces[i].width;
-            Point upperLeftPoint = detectedFaces[i].tl();
-            maskingImage = resizeImage(this.coverPhoto, height, width);
-            this.overlayImage(sourceImage, maskingImage, sourceImage, upperLeftPoint);
-            //Imgproc.warpAffine( maskingImage, sourceImage, affineMat, sourceImage.size(), Core.BORDER_TRANSPARENT);
-            //Imgproc.rectangle(sourceImage, detectedFaces[i].tl(), detectedFaces[i].br(), new Scalar(0, 0, 255), 3);
-        }
-        Utils.matToBitmap(sourceImage, faceMaskedBitmap);
-        //progressDialog.dismiss();
-    }
-
-    public static void overlayImage(Mat background,Mat foreground,Mat output, Point location){
-
-        background.copyTo(output);
-
-        for(int y = (int) Math.max(location.y , 0); y < background.rows(); ++y){
-
-            int fY = (int) (y - location.y);
-
-            if(fY >= foreground.rows())
-                break;
-
-            for(int x = (int) Math.max(location.x, 0); x < background.cols(); ++x){
-                int fX = (int) (x - location.x);
-                if(fX >= foreground.cols()){
-                    break;
-                }
-
-                double opacity;
-                double[] finalPixelValue = new double[4];
-
-                opacity = foreground.get(fY , fX)[3];
-
-                finalPixelValue[0] = background.get(y, x)[0];
-                finalPixelValue[1] = background.get(y, x)[1];
-                finalPixelValue[2] = background.get(y, x)[2];
-                finalPixelValue[3] = background.get(y, x)[3];
-
-                for(int c = 0;  c < output.channels(); ++c){
-                    if(opacity > 0){
-                        double foregroundPx =  foreground.get(fY, fX)[c];
-                        double backgroundPx =  background.get(y, x)[c];
-
-                        float fOpacity = (float) (opacity / 255);
-                        finalPixelValue[c] = ((backgroundPx * ( 1.0 - fOpacity)) + (foregroundPx * fOpacity));
-                        if(c==3){
-                            finalPixelValue[c] = foreground.get(fY,fX)[3];
-                        }
-                    }
-                }
-                output.put(y, x,finalPixelValue);
-            }
         }
     }
 
