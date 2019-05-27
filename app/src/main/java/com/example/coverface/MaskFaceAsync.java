@@ -5,6 +5,7 @@ import android.graphics.Bitmap;
 import android.os.AsyncTask;
 import android.util.Log;
 import android.widget.ProgressBar;
+import android.widget.TextView;
 
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
@@ -18,9 +19,11 @@ import org.opencv.objdetect.CascadeClassifier;
 
 public class MaskFaceAsync extends AsyncTask<Activity, Integer, Bitmap> {
 
-    Activity activity;
+    ProcessingActivity activity;
     private ProgressBar progressBar;
     private int progressVal;
+    private TextView numOfFace;
+    private TextView progressDescription;
 
     Bitmap coverPhotoBitmap;
     Bitmap takenPhotoBitmap;
@@ -28,7 +31,7 @@ public class MaskFaceAsync extends AsyncTask<Activity, Integer, Bitmap> {
 
     private CallBackTask callBackTask;
 
-    public MaskFaceAsync(Activity activity, Bitmap coverPhoto, Bitmap takenPhoto, CascadeClassifier cascadeClassifier) {
+    public MaskFaceAsync(ProcessingActivity activity, Bitmap coverPhoto, Bitmap takenPhoto, CascadeClassifier cascadeClassifier) {
         this.activity = activity;
         this.coverPhotoBitmap = coverPhoto;
         this.takenPhotoBitmap = takenPhoto;
@@ -41,6 +44,8 @@ public class MaskFaceAsync extends AsyncTask<Activity, Integer, Bitmap> {
         progressBar = activity.findViewById(R.id.progress_bar);
         progressBar.setMax(100);
         progressBar.setProgress(this.progressVal);
+        activity.setNumOfFaceTextAsync("顔を検出中");
+        activity.setProgressTextAsync("すこし待ってください");
     }
 
     @Override
@@ -79,10 +84,13 @@ public class MaskFaceAsync extends AsyncTask<Activity, Integer, Bitmap> {
         MatOfRect faceDetectResults = new MatOfRect();
         cascadeClassifier.detectMultiScale(sourceImage, faceDetectResults);
         Rect[] detectedFaces = faceDetectResults.toArray();
+        activity.setNumOfFaceTextAsync("顔が" + detectedFaces.length + "個見つかりました");
+        activity.setProgressTextAsync("0個目の顔を隠しています");
         Mat maskingImage;
         if (detectedFaces.length != 0) {
             int progressStep = 100 / detectedFaces.length;
             for (int i = 0; i < detectedFaces.length; i++) {
+                activity.setProgressTextAsync((i+1) + "個目の顔を隠しています");
                 int height = detectedFaces[i].height;
                 int width = detectedFaces[i].width;
                 Point upperLeftPoint = detectedFaces[i].tl();
@@ -90,7 +98,6 @@ public class MaskFaceAsync extends AsyncTask<Activity, Integer, Bitmap> {
                 this.overlayImage(sourceImage, maskingImage, sourceImage, upperLeftPoint);
                 this.progressVal += progressStep;
                 publishProgress(this.progressVal);
-                Log.d("val", String.valueOf(this.progressVal));
             }
             Utils.matToBitmap(sourceImage, faceMaskedBitmap);
             Log.d("MASK", "masked");

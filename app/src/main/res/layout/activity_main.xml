@@ -28,14 +28,19 @@
                 android:id="@+id/delete_button"
                 android:layout_width="283dp"
                 android:layout_height="wrap_content"
+                android:background="#333333"
+                android:fontFamily="sans-serif-black"
                 android:onClick="onClick"
                 android:text="削除"
+                android:textColor="#ffffff"
                 tools:layout_editor_absoluteX="411dp" />
 
             <Button
                 android:id="@+id/save_button"
                 android:layout_width="313dp"
                 android:layout_height="wrap_content"
+                android:background="#ffffff"
+                android:fontFamily="sans-serif-black"
                 android:onClick="onClick"
                 android:text="保存"
                 tools:layout_editor_absoluteX="411dp" />
