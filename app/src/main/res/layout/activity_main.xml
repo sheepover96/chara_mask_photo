@@ -14,7 +14,7 @@
         <ImageView
             android:id="@+id/taken_image"
             android:layout_width="match_parent"
-            android:layout_height="585dp"
+            android:layout_height="743dp"
             android:src="@mipmap/ic_launcher"
             app:layout_constraintEnd_toEndOf="parent"
             tools:layout_editor_absoluteY="41dp" />
@@ -26,17 +26,22 @@
 
             <Button
                 android:id="@+id/delete_button"
-                android:onClick="onClick"
-                android:layout_width="209dp"
+                android:layout_width="283dp"
                 android:layout_height="wrap_content"
+                android:background="#333333"
+                android:fontFamily="sans-serif-black"
+                android:onClick="onClick"
                 android:text="削除"
+                android:textColor="#ffffff"
                 tools:layout_editor_absoluteX="411dp" />
 
             <Button
                 android:id="@+id/save_button"
-                android:onClick="onClick"
-                android:layout_width="202dp"
+                android:layout_width="313dp"
                 android:layout_height="wrap_content"
+                android:background="#ffffff"
+                android:fontFamily="sans-serif-black"
+                android:onClick="onClick"
                 android:text="保存"
                 tools:layout_editor_absoluteX="411dp" />
         </LinearLayout>
