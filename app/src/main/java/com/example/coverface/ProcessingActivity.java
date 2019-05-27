@@ -5,10 +5,12 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Environment;
+import android.os.Handler;
 import android.os.ParcelFileDescriptor;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
 import android.util.Log;
+import android.widget.TextView;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.LoaderCallbackInterface;
@@ -36,6 +38,7 @@ public class ProcessingActivity extends AppCompatActivity {
     Bitmap coverPhotoBitmap;
     Bitmap faceMaskedBitmap;
     CascadeClassifier cascadeClassifier;
+    Handler guiThreadHandler;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -59,6 +62,7 @@ public class ProcessingActivity extends AppCompatActivity {
                         }
                     }
                     cascadeClassifier = new CascadeClassifier(file.getAbsolutePath());
+                    guiThreadHandler = new Handler();
                     startMaskingFace();
                     break;
                 default:
@@ -96,7 +100,6 @@ public class ProcessingActivity extends AppCompatActivity {
                 public void CallBack(Bitmap resultBitmap) {
                     faceMaskedBitmap = resultBitmap;
                     try {
-                        Log.d("finish", "finish");
                         File saveFile = createImageFile();
                         saveBitmapImage(saveFile.getAbsolutePath(), faceMaskedBitmap);
                         Intent resultIntent = new Intent();
@@ -112,6 +115,26 @@ public class ProcessingActivity extends AppCompatActivity {
         } catch (IOException e) {
             e.printStackTrace();
         }
+    }
+
+    public void setNumOfFaceTextAsync(final String text) {
+        guiThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                TextView numOfFace = findViewById(R.id.num_of_face);
+                numOfFace.setText(text);
+            }
+        });
+    }
+
+    public void setProgressTextAsync(final String text) {
+        guiThreadHandler.post(new Runnable() {
+            @Override
+            public void run() {
+                TextView progressDescription = findViewById(R.id.progress_description);
+                progressDescription.setText(text);
+            }
+        });
     }
 
     static public File createImageFile() throws IOException {
