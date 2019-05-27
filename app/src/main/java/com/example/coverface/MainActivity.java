@@ -48,14 +48,37 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private static final String FILE_NAME = "haarcascade_frontalface_alt.xml";
     static final int REQUEST_TAKE_PHOTO = 1;
     private static final int READ_REQUEST_CODE = 2;
+    private static final int FACE_MASK_CODE = 3;
     String currentPhotoPath;
     File photoFile;
     File maskPhotoFile;
     Mat coverPhoto;
+    Bitmap coverPhotoBitmap;
+    Uri coverPhotoUri;
     Mat takenPhoto;
+    Bitmap takenPhotoBitmap;
+    Uri takenPhotoUri;
     Bitmap resultBitmap;
 
     CascadeClassifier cascadeClassifier;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        setContentView(R.layout.activity_main);
+
+        //this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        if (OpenCVLoader.initDebug()) {
+            this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
+        } else {
+            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, getApplicationContext(),
+                    mLoaderCallback);
+        }
+
+        //this.performFileSearch();
+        //this.dispatchTakePictureIntent();
+        //this.galleryAddPic();
+    }
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
@@ -68,7 +91,7 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                     File file = new File(getFilesDir().getPath() + File.separator + FILE_NAME);
                     if (!file.exists()) {
                         try (InputStream inputStream = getAssets().open(FILE_NAME);
-                             FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
+                            FileOutputStream fileOutputStream = new FileOutputStream(file, false)) {
                             byte[] buffer = new byte[1024];
                             int read;
                             while ((read = inputStream.read(buffer)) != -1) {
@@ -89,24 +112,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
             }
         }
     };
-
-    @Override
-    protected void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        setContentView(R.layout.activity_main);
-
-        //this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-        if (OpenCVLoader.initDebug()) {
-            this.mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
-        } else {
-            OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION, getApplicationContext(),
-                    mLoaderCallback);
-        }
-
-        //this.performFileSearch();
-        //this.dispatchTakePictureIntent();
-        //this.galleryAddPic();
-    }
 
     @Override
     public void onClick(View view) {
@@ -157,14 +162,8 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     }
 
     private void dispatchTakePictureIntent() {
-        //Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        //if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-        //    startActivityForResult(takePictureIntent, REQUEST_IMAGE_CAPTURE);
-        //}
         Intent takePictureIntent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
-        // Ensure that there's a camera activity to handle the intent
         if (takePictureIntent.resolveActivity(getPackageManager()) != null) {
-            // Create the File where the photo should go
             this.photoFile = null;
             try {
                 this.photoFile = createImageFile();
@@ -189,20 +188,24 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         if (resultCode == RESULT_OK) {
             switch (requestCode) {
                 case REQUEST_TAKE_PHOTO:
-                    Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
-                    resultBitmap = imageBitmap;
-                    this.takenPhoto = new Mat();
-                    Utils.bitmapToMat(imageBitmap, this.takenPhoto);
-                    ImageView imageView = (ImageView) findViewById(R.id.taken_image);
-                    this.maskHumanFace(this.takenPhoto, resultBitmap);
-                    imageView.setImageBitmap(resultBitmap);
+                    //Bitmap imageBitmap = BitmapFactory.decodeFile(this.photoFile.getPath());
+                    //resultBitmap = imageBitmap;
+                    //this.takenPhoto = new Mat();
+                    //Utils.bitmapToMat(imageBitmap, this.takenPhoto);
+                    //this.maskHumanFace(this.takenPhoto, resultBitmap);
+                    Intent faceMaskIntent = new Intent(getApplicationContext(), ProcessingActivity.class);
+                    faceMaskIntent.putExtra("coverPhotoUri", this.coverPhotoUri);
+                    faceMaskIntent.putExtra("takenPhotoFile", this.photoFile);
+                    startActivityForResult(faceMaskIntent, FACE_MASK_CODE);
+                    //ImageView imageView = (ImageView) findViewById(R.id.taken_image);
+                    //imageView.setImageBitmap(resultBitmap);
                     break;
                 case READ_REQUEST_CODE:
-                    Uri coverPhotoUri = null;
+                    this.coverPhotoUri = null;
                     if (data != null) {
-                        coverPhotoUri = data.getData();
+                        this.coverPhotoUri = data.getData();
                         try {
-                            Bitmap coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
+                            coverPhotoBitmap = this.getBitmapFromUri(coverPhotoUri);
                             this.coverPhoto = new Mat();
                             Utils.bitmapToMat(coverPhotoBitmap, this.coverPhoto);
                             this.dispatchTakePictureIntent();
@@ -211,6 +214,13 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
                         }
                     }
                     break;
+                case FACE_MASK_CODE:
+                    if (data != null) {
+                        ImageView imageView = (ImageView) findViewById(R.id.taken_image);
+                        File imageFile = (File) data.getExtras().get("faceMaskedFile");
+                        resultBitmap = BitmapFactory.decodeFile(imageFile.getPath());
+                        imageView.setImageBitmap(resultBitmap);
+                    }
                 default:
                     break;
             }
@@ -244,7 +254,6 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
         Rect[] detectedFaces = faceDetectResults.toArray();
         Mat maskingImage;
         Mat affineMat = new Mat(2, 3, CvType.CV_64F);
-        Log.d("mask", "mask");
         for (int i = 0; i < detectedFaces.length; i++) {
             int height = detectedFaces[i].height;
             int width = detectedFaces[i].width;
